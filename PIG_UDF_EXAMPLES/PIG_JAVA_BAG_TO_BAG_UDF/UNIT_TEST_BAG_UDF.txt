@@ -1,0 +1,123 @@
+schema(pack,r_mod,r_flag,a_mod,a_flag,filename)
+pack1,mod1,1,mod2,2,filename1
+pack1,mod3,1,mod4,2,filename2
+schema(pack,mod1,mod1_dt,mod2,mod2_dt,mod3,mod3_dt,mod4,mod4_dt,mod5,mod5_dt,xxxx,yyyy)
+pack1,mod1,mod1_dt,mod2,mod2_dt,mod3,mod3_dt,mod4,mod4_dt,mod5,mod5_dt,xxxx,yyyy
+
+pmlu = load 'pmlu' using PigStorage(',') as (pack,r_mod,r_flag,a_mod,a_flag,filename);
+
+pack_info = load 'packinfo' using PigStorage(',') as (pack,mod1,mod1_dt,mod2,mod2_dt,mod3,mod3_dt,mod4,mod4_dt,mod5,mod5_dt,xxxx,yyyy);
+
+cgrp = cogroup pmlu by pack, pack_info by pack;
+
+split cgrp into valid if(not IsEmpty($1) and not IsEmpty($2)), other_data otherwise;
+/*
+dump valid
+(pack1,{(pack1,mod3,1,mod4,2,filename2),(pack1,mod1,1,mod2,2,filename1)},{(pack1,mod1,mod1_dt,mod2,mod2_dt,mod3,mod3_dt,mod4,mod4_dt,mod5,mod5_dt,xxxx,yyyy)})
+*/
+
+data = foreach valid generate BagToTuple($1), BagToTuple($2)
+/*
+((pack1,mod3,1,mod4,2,filename2,pack1,mod1,1,mod2,2,filename1),(pack1,mod1,mod1_dt,mod2,mod2_dt,mod3,mod3_dt,mod4,mod4_dt,mod5,mod5_dt,xxxx,yyyy))
+
+*/
+
+data = foreach valid {
+ pmlu_r_mod = pmlu.r_mod;
+ pmlu_a_mod = pmlu.a_mod;
+ 
+ generate group, pmlu_r_mod , pmlu_a_mod;
+};
+/*
+(pack1,{(mod3),(mod1)},{(mod4),(mod2)})
+
+*/
+/*
+data = foreach valid {
+ pmlu_r_mod = pmlu.r_mod;
+ pmlu_a_mod = pmlu.a_mod;
+ pk = BagToString(packinfo,','); 
+ generate group, pmlu_r_mod , pmlu_a_mod;
+};
+*/
+-------------------------------------------------------------------------------------------
+register pmlu_update.jar
+data = foreach valid generate pmlu_update($1,$2);
+
+pack1,mod1,1,mod2,2,filename1
+pack1,mod3,1,mod4,2,filename2
+
+pack1,mod1,mod1_dt,mod2,mod2_dt,mod3,mod3_dt,mod4,mod4_dt,mod5,mod5_dt,xxxx,yyyy
+
+output:
+((pack1,mod2,mod1_dt,mod2,mod2_dt,mod4,mod3_dt,mod4,mod4_dt,mod5,mod5_dt,xxxx,yyyy))
+
+data = foreach valid generate flatten(pmlu_update($1,$2)) as f;
+output:
+(pack1,mod2,mod1_dt,mod2,mod2_dt,mod4,mod3_dt,mod4,mod4_dt,mod5,mod5_dt,xxxx,yyyy)
+------------------------------------------------------------------------------------------
+
+({(pack1,mod2,mod1_dt,mod2,mod2_dt,mod4,mod3_dt,mod4,mod4_dt,mod5,mod5_dt,xxxx,yyyy),
+(pack1,mod3,1,mod4,2,filename2),(pack1,mod1,1,mod2,2,filename1)})
+
+
+------------------------------------------------------------------------------------------
+2018-02-19 20:27:26,138 [main] INFO  org.apache.pig.backend.hadoop.executionengine.util.MapRedUtil - Total input paths to process : 1
+(pack1,{(pack1,mod3,1,mod4,2,filename2),(pack1,mod1,1,mod2,2,filename1)},{(pack1,mod1,mod1_dt,mod2,mod2_dt,mod3,mod3_dt,mod4,mod4_dt,mod5,mod5_dt,xxxx,yyyy)})
+grunt>
+grunt>
+grunt> describe valid
+valid: {group: bytearray,pmlu: {(pack: bytearray,r_mod: bytearray,r_flag: bytearray,a_mod: bytearray,a_flag: bytearray,filename: bytearray)},pack_info: {(pack: bytearray,mod1: bytearray,mod1_dt: bytearray,mod2: bytearray,mod2_dt: bytearray,mod3: bytearray,mod3_dt: bytearray,mod4: bytearray,mod4_dt: bytearray,mod5: bytearray,mod5_dt: bytearray,xxxx: bytearray,yyyy: bytearray)}}
+grunt>
+grunt>
+grunt>
+-----------------------------------------------
+grunt> describe data;
+data: {pmlu_update_pmlu_15: {(packinfo: (),packinfo: {})}}
+
+({(pack1,mod2,mod1_dt,mod2,mod2_dt,mod4,mod3_dt,mod4,mod4_dt,mod5,mod5_dt,xxxx,yyyy),(pack1,mod3,1,mod4,2,filename2),(pack1,mod1,1,mod2,2,filename1)})
+
+----------------------------------------------
+grunt> register pmlu_update.jar
+grunt> data = foreach valid generate pmlu_update($1,$2) as f;
+grunt> describe data;
+data: {f: {(packinfo: (),pmlu_applied_files: {})}}
+grunt> describe valid
+valid: {group: bytearray,pmlu: {(pack: bytearray,r_mod: bytearray,r_flag: bytearray,a_mod: bytearray,a_flag: bytearray,filename: bytearray)},pack_info: {(pack: bytearray,mod1: bytearray,mod1_dt: bytearray,mod2: bytearray,mod2_dt: bytearray,mod3: bytearray,mod3_dt: bytearray,mod4: bytearray,mod4_dt: bytearray,mod5: bytearray,mod5_dt: bytearray,xxxx: bytearray,yyyy: bytearray)}}
+grunt>dump data
+
+({(pack1,mod2,mod1_dt,mod2,mod2_dt,mod4,mod3_dt,mod4,mod4_dt,mod5,mod5_dt,xxxx,yyyy),(pack1,mod3,1,mod4,2,filename2),(pack1,mod1,1,mod2,2,filename1)})
+
+-------------------------------------------------------
+grunt> data = foreach valid generate pmlu_update($1,$2) as f;
+grunt> describe data;
+data: {f: {(packinfo: (),pmlu_applied_files: {})}}
+-------------------------------------------------------
+
+grunt> cgrp = cogroup pmlu by pack, pack_info by pack;
+grunt> split cgrp into valid if(not IsEmpty($1) and not IsEmpty($2)), other_data otherwise;
+grunt> data = foreach valid generate pmlu_update($1,$2) as f;
+grunt> register pmlu_update.jar
+grunt> data = foreach valid generate pmlu_update($1,$2) as f;
+grunt> describe data;
+data: {f: {union_tuples: ()}}
+grunt>
+
+({(pack1,mod2,mod1_dt,mod2,mod2_dt,mod4,mod3_dt,mod4,mod4_dt,mod5,mod5_dt,xxxx,yyyy),(pack1,mod3,1,mod4,2,filename2),(pack1,mod1,1,mod2,2,filename1)})
+
+-------------------------------------------------------
+(pack1,mod2,mod1_dt,mod2,mod2_dt,mod4,mod3_dt,mod4,mod4_dt,mod5,mod5_dt,xxxx,yyyy)
+(pack1,mod3,1,mod4,2,filename2)
+(pack1,mod1,1,mod2,2,filename1)
+grunt> describe data
+Schema for data unknown.
+grunt> data = foreach valid generate FLATTEN(pmlu_update($1,$2));
+
+--------------------------------------------------------
+
+
+
+
+
+
+
